@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HookHarbor.Api/HookHarbor.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HookHarbor.Api.Tests/HookHarbor.Api.Tests.csproj" />
+  </Folder>
+</Solution>

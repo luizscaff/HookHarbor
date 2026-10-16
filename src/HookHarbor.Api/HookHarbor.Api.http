@@ -1,0 +1,6 @@
+@HookHarbor.Api_HostAddress = http://localhost:5226
+
+GET {{HookHarbor.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
