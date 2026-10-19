@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".env.example" />
+    <File Path=".gitignore" />
+    <File Path="compose.yaml" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/HookHarbor.Api/HookHarbor.Api.csproj" />
   </Folder>

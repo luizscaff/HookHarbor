@@ -4,3 +4,13 @@ GET {{HookHarbor.Api_HostAddress}}/health
 Accept: text/plain
 
 ###
+POST {{HookHarbor.Api_HostAddress}}/api/endpoints
+Content-Type: application/json
+{
+  "name": "Local test endpoint",
+  "destinationUrl": "https://example.com/webhooks"
+}
+
+###
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/replace-with-created-id
+Accept: application/json

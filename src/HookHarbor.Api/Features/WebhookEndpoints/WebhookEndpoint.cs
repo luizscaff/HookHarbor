@@ -35,6 +35,15 @@ public sealed class WebhookEndpoint
         Name = name.Trim();
         InboundKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
         DestinationUrl = uri.AbsoluteUri;
-        CreatedAt = DateTimeOffset.UtcNow;
+        CreatedAt = TruncateToMicroseconds(DateTimeOffset.UtcNow);
+    }
+
+    private static DateTimeOffset TruncateToMicroseconds(
+    DateTimeOffset value)
+    {
+        const long ticksPerMicrosecond = 10;
+
+        return value.AddTicks(
+            -(value.Ticks % ticksPerMicrosecond));
     }
 }
