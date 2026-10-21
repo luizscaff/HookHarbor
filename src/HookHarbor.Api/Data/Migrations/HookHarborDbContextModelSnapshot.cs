@@ -57,6 +57,59 @@ namespace HookHarbor.Api.Data.Migrations
 
                     b.ToTable("webhook_endpoints", (string)null);
                 });
+
+            modelBuilder.Entity("HookHarbor.Api.Features.WebhookEvents.WebhookEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Body")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("Headers")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("headers");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("WebhookEndpointId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("webhook_endpoint_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WebhookEndpointId", "ReceivedAt");
+
+                    b.ToTable("webhook_events", (string)null);
+                });
+
+            modelBuilder.Entity("HookHarbor.Api.Features.WebhookEvents.WebhookEvent", b =>
+                {
+                    b.HasOne("HookHarbor.Api.Features.WebhookEndpoints.WebhookEndpoint", "WebhookEndpoint")
+                        .WithMany()
+                        .HasForeignKey("WebhookEndpointId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WebhookEndpoint");
+                });
 #pragma warning restore 612, 618
         }
     }

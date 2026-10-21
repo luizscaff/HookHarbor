@@ -7,19 +7,9 @@ using System.Net.Http.Json;
 
 namespace HookHarbor.Api.Tests;
 
-public sealed class WebhookEndpointTests : IClassFixture<HookHarborWebApplicationFactory>
+public sealed class WebhookEndpointTests(HookHarborWebApplicationFactory factory) : IClassFixture<HookHarborWebApplicationFactory>
 {
-    private readonly HttpClient _client;
-
-    public WebhookEndpointTests(HookHarborWebApplicationFactory factory)
-    {
-        _client = factory.CreateClient(
-            new WebApplicationFactoryClientOptions
-            {
-                BaseAddress = new Uri("https://localhost")
-            }
-        );
-    }
+    private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task Create_WithValidRequest_PersistsEndpoint()
