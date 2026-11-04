@@ -3,8 +3,10 @@ using HookHarbor.Api.Features.WebhookEndpoints.Requests;
 using HookHarbor.Api.Features.WebhookEndpoints.Responses;
 using HookHarbor.Api.Features.WebhookEvents;
 using HookHarbor.Api.Features.WebhookEvents.Responses;
+using HookHarbor.Api.Tests.TestInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Validation;
 using Org.BouncyCastle.Asn1.Ocsp;
 using System.Net;
 using System.Net.Http.Json;
@@ -30,9 +32,10 @@ public sealed class WebhookEventTests(HookHarborWebApplicationFactory factory) :
 
         endpointResponse.EnsureSuccessStatusCode();
 
-        var endpoint = await endpointResponse.Content.ReadFromJsonAsync<WebhookEndpointResponse>();
-
-        Assert.NotNull(endpoint);
+        var endpoint = await endpointResponse
+            .Content
+            .ReadFromJsonAsync<WebhookEndpointResponse>()
+            ?? throw new InvalidOperationException("The endpoint response body was empty");
 
         const string body = """
            {
@@ -62,24 +65,29 @@ public sealed class WebhookEventTests(HookHarborWebApplicationFactory factory) :
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
-        var accepted = await response.Content.ReadFromJsonAsync<WebhookEventAcceptedResponse>();
+        var accepted = await response
+            .Content
+            .ReadFromJsonAsync<WebhookEventAcceptedResponse>()
+            ?? throw new InvalidOperationException("The accepted response body was empty");
 
-        Assert.NotNull(accepted);
         Assert.Equal("Pending", accepted.Status);
 
         await using var scope = factory.Services.CreateAsyncScope();
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var storedEvent = await dbContext.WebhookEvents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == accepted.Id);
-
+        var storedEvent = await dbContext.WebhookEvents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == accepted.Id) ?? throw new InvalidOperationException("The webhook event was not persisted.");
+        
         Assert.Equal(endpoint.Id, storedEvent.WebhookEndpointId);
 
         Assert.Equal(Encoding.UTF8.GetBytes(body), storedEvent.Body);
 
         Assert.Equal(WebhookEventStatus.Pending, storedEvent.Status);
 
+        Assert.NotNull(storedEvent.ContentType);
         Assert.StartsWith("application/json", storedEvent.ContentType);
+
+        var storedHeaders = storedEvent.Headers ?? throw new InvalidOperationException("The stored event headers were null");
 
         using var headers = JsonDocument.Parse(storedEvent.Headers);
 

@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using HookHarbor.Api.Tests.TestInfrastructure;
 
 namespace HookHarbor.Api.Tests;
 

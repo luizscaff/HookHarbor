@@ -7,8 +7,8 @@ Accept: text/plain
 POST {{HookHarbor.Api_HostAddress}}/api/endpoints
 Content-Type: application/json
 {
-  "name": "Local test endpoint",
-  "destinationUrl": "https://example.com/webhooks"
+  "name": "Worker success test",
+  "destinationUrl": "https://webhook.site/YOUR-UNIQUE-ID"
 }
 
 ###
@@ -16,12 +16,12 @@ GET {{HookHarbor.Api_HostAddress}}/api/endpoints/replace-with-created-id
 Accept: application/json
 
 ###
-POST {{HookHarbor.Api_HostAddress}}/in/030048ba3f673cffccd116b5544c890dc51df6d0c0677cfd
+POST {{HookHarbor.Api_HostAddress}}/in/replace-with-inbound-key
 Accept: application/json
+Content-Type: application/json
 X-Webhook-Source: manual-test
 
 {
-  "type": "payment.succeeded",
-  "customerId": 123,
-  "amount": 4990
+  "type": "worker.test",
+  "message": "Hello from HookHarbor"
 }

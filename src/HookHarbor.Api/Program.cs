@@ -1,5 +1,7 @@
 using HookHarbor.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +24,16 @@ builder.Services.AddDbContext<HookHarborDbContext>(
 
         options.UseNpgsql(connectionString);
     });
+
+builder.Services.AddHttpClient<WebhookDeliveryService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService<WebhookDeliveryWorker>();
+}
 
 var app = builder.Build();
 

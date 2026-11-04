@@ -22,6 +22,59 @@ namespace HookHarbor.Api.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("HookHarbor.Api.Features.WebhookDeliveryAttempts.WebhookDeliveryAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_number");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("DestinationUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("destination_url");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("error_message");
+
+                    b.Property<byte[]>("ResponseBody")
+                        .HasColumnType("bytea")
+                        .HasColumnName("response_body");
+
+                    b.Property<int?>("ResponseStatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("response_status_code");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("succeeded");
+
+                    b.Property<Guid>("WebhookEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("webhook_event_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WebhookEventId", "AttemptNumber")
+                        .IsUnique();
+
+                    b.ToTable("webhook_delivery_attempts", (string)null);
+                });
+
             modelBuilder.Entity("HookHarbor.Api.Features.WebhookEndpoints.WebhookEndpoint", b =>
                 {
                     b.Property<Guid>("Id")
@@ -98,6 +151,17 @@ namespace HookHarbor.Api.Data.Migrations
                     b.HasIndex("WebhookEndpointId", "ReceivedAt");
 
                     b.ToTable("webhook_events", (string)null);
+                });
+
+            modelBuilder.Entity("HookHarbor.Api.Features.WebhookDeliveryAttempts.WebhookDeliveryAttempt", b =>
+                {
+                    b.HasOne("HookHarbor.Api.Features.WebhookEvents.WebhookEvent", "WebhookEvent")
+                        .WithMany()
+                        .HasForeignKey("WebhookEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WebhookEvent");
                 });
 
             modelBuilder.Entity("HookHarbor.Api.Features.WebhookEvents.WebhookEvent", b =>

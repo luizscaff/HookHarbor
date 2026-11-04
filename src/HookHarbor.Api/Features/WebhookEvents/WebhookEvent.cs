@@ -1,10 +1,20 @@
 ﻿using HookHarbor.Api.Features.WebhookEndpoints;
 using HookHarbor.Api.Common;
+using System.Security.Cryptography.X509Certificates;
 
 namespace HookHarbor.Api.Features.WebhookEvents;
 
 public class WebhookEvent
 {
+    public Guid Id { get; private set; }
+    public Guid WebhookEndpointId { get; private set; }
+    public byte[] Body { get; private set; } = [];
+    public string? ContentType { get; private set; }
+    public string Headers { get; private set; } = "{}";
+    public WebhookEventStatus Status { get; private set; }
+    public DateTimeOffset ReceivedAt { get; private set; }
+    public WebhookEndpoint WebhookEndpoint { get; private set; } = null!;
+
     private WebhookEvent()
     {
 
@@ -34,20 +44,23 @@ public class WebhookEvent
         ReceivedAt = DateTimePrecision.TruncateToMicroseconds(receivedAt);
     }
 
-    public Guid Id { get; private set; }
+    public void MarkDelivered()
+    {
+        if (Status == WebhookEventStatus.Delivered)
+        {
+            return;
+        }
 
-    public Guid WebhookEndpointId { get; private set; }
+        Status = WebhookEventStatus.Delivered;
+    }
 
-    public byte[] Body { get; private set; } = [];
+    public void MarkFailed()
+    {
+        if (Status == WebhookEventStatus.Delivered)
+        {
+            throw new InvalidOperationException("A delivered webhook event cannot be marked as failed.");
+        }
 
-    public string? ContentType { get; private set; }
-
-    public string? Headers { get; private set; } = "{}";
-
-    public WebhookEventStatus Status { get; private set; }
-
-    public DateTimeOffset ReceivedAt { get; private set; }
-
-    public WebhookEndpoint WebhookEndpoint { get; private set; } = null!;
-
+        Status = WebhookEventStatus.Failed;
+    }
 }

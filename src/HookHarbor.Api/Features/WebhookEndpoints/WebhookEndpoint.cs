@@ -6,13 +6,9 @@ namespace HookHarbor.Api.Features.WebhookEndpoints;
 public sealed class WebhookEndpoint
 {
     public Guid Id { get; private set; }
-
     public string Name { get; private set; } = string.Empty;
-
     public string InboundKey { get; private set; } = string.Empty;
-
     public string DestinationUrl { get; private set; } = string.Empty;
-
     public DateTimeOffset CreatedAt { get; private set; }
 
     private WebhookEndpoint()

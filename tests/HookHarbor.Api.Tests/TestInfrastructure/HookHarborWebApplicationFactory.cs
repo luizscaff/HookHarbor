@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
-namespace HookHarbor.Api.Tests;
+namespace HookHarbor.Api.Tests.TestInfrastructure;
 
 public sealed class HookHarborWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
