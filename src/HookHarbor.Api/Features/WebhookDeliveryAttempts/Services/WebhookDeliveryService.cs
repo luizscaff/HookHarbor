@@ -60,33 +60,53 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
                 .Content
                 .ReadAsByteArrayAsync(cancellationToken);
 
+            var completedAt = DateTimeOffset.UtcNow;
+
             attempt.Complete(
                 (int)response.StatusCode,
                 responseBody,
-                DateTimeOffset.UtcNow);
+                completedAt);
 
-            if (attempt.Succeeded)
-            {
-                webhookEvent.MarkDelivered();
-            }
-            else
-            {
-                webhookEvent.MarkFailed();
-            }
+            UpdateEventStatus(webhookEvent, attempt, completedAt);
         }
         catch (HttpRequestException exception)
         {
-            attempt.Fail(exception.Message, DateTimeOffset.UtcNow);
+            var completedAt = DateTimeOffset.UtcNow;
 
-            webhookEvent.MarkFailed();
-        } catch (TaskCanceledException exception)
+            attempt.Fail(exception.Message, completedAt);
+
+            UpdateEventStatus(webhookEvent, attempt, completedAt);
+        }
+        catch (TaskCanceledException exception)
             when (!cancellationToken.IsCancellationRequested)
         {
-            attempt.Fail($"The destination request timed out: {exception.Message}", DateTimeOffset.UtcNow);
+            var completedAt = DateTimeOffset.UtcNow;
 
-            webhookEvent.MarkFailed();
+            attempt.Fail($"The destination request timed out: {exception.Message}", completedAt);
+
+            UpdateEventStatus(webhookEvent, attempt, completedAt);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void UpdateEventStatus(WebhookEvent webhookEvent, WebhookDeliveryAttempt attempt, DateTimeOffset completedAt)
+    {
+        if (attempt.Succeeded)
+        {
+            webhookEvent.MarkDelivered();
+            return;
+        }
+
+        if (WebhookRetryPolicy.ShouldRetry(attempt.AttemptNumber, attempt.ResponseStatusCode))
+        {
+            var delay = WebhookRetryPolicy.GetDelay(attempt.AttemptNumber);
+
+            webhookEvent.ScheduleRetry(completedAt.Add(delay));
+
+            return;
+        }
+
+        webhookEvent.MarkFailed();
     }
 }

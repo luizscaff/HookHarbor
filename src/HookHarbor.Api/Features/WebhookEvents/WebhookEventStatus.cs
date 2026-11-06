@@ -3,6 +3,7 @@
 public enum WebhookEventStatus
 {
     Pending,
+    RetryScheduled,
     Delivered,
     Failed
 }

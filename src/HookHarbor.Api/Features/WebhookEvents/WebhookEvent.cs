@@ -14,6 +14,7 @@ public class WebhookEvent
     public WebhookEventStatus Status { get; private set; }
     public DateTimeOffset ReceivedAt { get; private set; }
     public WebhookEndpoint WebhookEndpoint { get; private set; } = null!;
+    public DateTimeOffset? NextAttemptAt { get; private set; }
 
     private WebhookEvent()
     {
@@ -52,6 +53,7 @@ public class WebhookEvent
         }
 
         Status = WebhookEventStatus.Delivered;
+        NextAttemptAt = null;
     }
 
     public void MarkFailed()
@@ -62,5 +64,17 @@ public class WebhookEvent
         }
 
         Status = WebhookEventStatus.Failed;
+        NextAttemptAt = null;
+    }
+
+    public void ScheduleRetry(DateTimeOffset nextAttemptAt)
+    {
+        if (Status == WebhookEventStatus.Delivered)
+        {
+            throw new InvalidOperationException("A delivered webhook event cannot be retried");
+        }
+
+        Status = WebhookEventStatus.RetryScheduled;
+        NextAttemptAt = DateTimePrecision.TruncateToMicroseconds(nextAttemptAt);
     }
 }

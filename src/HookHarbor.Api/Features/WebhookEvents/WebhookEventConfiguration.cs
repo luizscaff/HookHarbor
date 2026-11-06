@@ -49,6 +49,10 @@ public class WebhookEventConfiguration : IEntityTypeConfiguration<WebhookEvent>
             .HasForeignKey(x => x.WebhookEndpointId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Property(x => x.NextAttemptAt)
+            .HasColumnName("next_attempt_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.HasIndex(x => new
         {
             x.WebhookEndpointId,

@@ -55,12 +55,14 @@ public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILo
         await using var scope = scopeFactory.CreateAsyncScope();
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+        
+        var now = DateTimeOffset.UtcNow;
 
         return await dbContext
             .WebhookEvents
             .AsNoTracking()
-            .Where(x => x.Status == WebhookEventStatus.Pending)
-            .OrderBy(x => x.ReceivedAt)
+            .Where(x => x.Status == WebhookEventStatus.Pending || (x.Status == WebhookEventStatus.RetryScheduled && x.NextAttemptAt <= now))
+            .OrderBy(x => x.NextAttemptAt ?? x.ReceivedAt)
             .Select(x => x.Id)
             .Take(BatchSize)
             .ToListAsync(cancellationToken);

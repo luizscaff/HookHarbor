@@ -19,7 +19,7 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
 
     private readonly HttpClient _client = factory.CreateClient();
 
-    private async Task<Guid> CreateWebhookEventAsync(string destinationUrl, string Body)
+    private async Task<Guid> CreateWebhookEventAsync(string destinationUrl, string body)
     {
         var endpointResponse = await _client.PostAsJsonAsync(
             "api/endpoints",
@@ -37,7 +37,7 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/in/{endpoint.InboundKey}");
 
-        request.Content = new StringContent(Body, Encoding.UTF8, "application/json");
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
         var ingestionResponse = await _client.SendAsync(request);
 
@@ -128,7 +128,7 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     }
 
     [Fact]
-    public async Task DeliverAsync_WithServerError_MarkEventFailed()
+    public async Task DeliverAsync_WithServerError_SchedulesRetry()
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
@@ -162,7 +162,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
             .AsNoTracking()
             .SingleAsync(x => x.WebhookEventId == webhookEventId);
 
-        Assert.Equal(WebhookEventStatus.Failed, storedEvent.Status);
+        Assert.Equal(WebhookEventStatus.RetryScheduled, storedEvent.Status);
+        Assert.NotNull(storedEvent.NextAttemptAt);
         Assert.False(attempt.Succeeded);
         Assert.Equal(500, attempt.ResponseStatusCode);
         Assert.NotNull(attempt.CompletedAt);
@@ -171,7 +172,7 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     }
 
     [Fact]
-    public async Task DeliverAsync_WithTransportError_RecordsError()
+    public async Task DeliverAsync_WithTransportError_SchedulesRetryAndRecordsError()
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
@@ -201,7 +202,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
             .AsNoTracking()
             .SingleAsync(x => x.WebhookEventId == webhookEventId);
 
-        Assert.Equal(WebhookEventStatus.Failed, storedEvent.Status);
+        Assert.Equal(WebhookEventStatus.RetryScheduled, storedEvent.Status);
+        Assert.NotNull(storedEvent.NextAttemptAt);
         Assert.False(attempt.Succeeded);
         Assert.Null(attempt.ResponseStatusCode);
         Assert.Null(attempt.ResponseBody);
@@ -225,5 +227,101 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeliverAsync(Guid.NewGuid(), CancellationToken.None));
 
         Assert.Contains("was not found", exception.Message);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WithBadRequest_MarksEventFailed()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+
+        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+
+        var handler = new StubHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+
+        using var httpClient = new HttpClient(handler);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+
+        var service = new WebhookDeliveryService(dbContext, httpClient);
+
+        await service.DeliverAsync(webhookEventId, CancellationToken.None);
+
+        dbContext.ChangeTracker.Clear();
+
+        var storedEvent = await dbContext
+            .WebhookEvents
+            .AsNoTracking()
+            .SingleAsync(x => x.Id ==  webhookEventId);
+
+        Assert.Null(storedEvent.NextAttemptAt);
+        Assert.Equal(WebhookEventStatus.Failed, storedEvent.Status);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_AfterRetriableFailure_SucceedsOnSecondAttempt()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+
+        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+
+        var requestCount = 0;
+
+        var handler = new StubHttpMessageHandler((_, _) =>
+        {
+            requestCount++;
+
+            if (requestCount == 1)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = new StringContent("""{"error": "Unavailable"}""", Encoding.UTF8, "application/json")
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"received": true}""", Encoding.UTF8, "application/json")
+            });
+        });
+
+        using var httpClient = new HttpClient(handler);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+
+        var service = new WebhookDeliveryService(dbContext, httpClient);
+
+        await service.DeliverAsync(webhookEventId, CancellationToken.None);
+
+        await service.DeliverAsync(webhookEventId, CancellationToken.None);
+
+        dbContext.ChangeTracker.Clear();
+
+        var storedEvent = await dbContext
+            .WebhookEvents
+            .AsNoTracking()
+            .SingleAsync(x => x.Id == webhookEventId);
+
+        var attempts = await dbContext
+            .WebhookDeliveryAttempts
+            .AsNoTracking()
+            .Where(x => x.WebhookEventId == webhookEventId)
+            .OrderBy(x => x.AttemptNumber)
+            .ToListAsync();
+
+        Assert.Equal(WebhookEventStatus.Delivered, storedEvent.Status);
+        Assert.Null(storedEvent.NextAttemptAt);
+        Assert.Equal(2, attempts.Count);
+
+        Assert.Equal(1, attempts[0].AttemptNumber);
+        Assert.False(attempts[0].Succeeded);
+        Assert.Equal(503, attempts[0].ResponseStatusCode);
+
+        Assert.Equal(2, attempts[1].AttemptNumber);
+        Assert.True(attempts[1].Succeeded);
+        Assert.Equal(200, attempts[1].ResponseStatusCode);
     }
 }

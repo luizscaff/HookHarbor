@@ -132,6 +132,10 @@ namespace HookHarbor.Api.Data.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("headers");
 
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at");
