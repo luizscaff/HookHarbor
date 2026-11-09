@@ -53,6 +53,10 @@ public class WebhookEventConfiguration : IEntityTypeConfiguration<WebhookEvent>
             .HasColumnName("next_attempt_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(x => x.ProcessingStartedAt)
+            .HasColumnName("processing_started_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.HasIndex(x => new
         {
             x.WebhookEndpointId,

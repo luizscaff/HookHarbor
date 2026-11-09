@@ -15,6 +15,7 @@ public class WebhookEvent
     public DateTimeOffset ReceivedAt { get; private set; }
     public WebhookEndpoint WebhookEndpoint { get; private set; } = null!;
     public DateTimeOffset? NextAttemptAt { get; private set; }
+    public DateTimeOffset? ProcessingStartedAt { get; private set; }
 
     private WebhookEvent()
     {
@@ -54,6 +55,7 @@ public class WebhookEvent
 
         Status = WebhookEventStatus.Delivered;
         NextAttemptAt = null;
+        ProcessingStartedAt = null;
     }
 
     public void MarkFailed()
@@ -65,6 +67,7 @@ public class WebhookEvent
 
         Status = WebhookEventStatus.Failed;
         NextAttemptAt = null;
+        ProcessingStartedAt = null;
     }
 
     public void ScheduleRetry(DateTimeOffset nextAttemptAt)
@@ -76,5 +79,6 @@ public class WebhookEvent
 
         Status = WebhookEventStatus.RetryScheduled;
         NextAttemptAt = DateTimePrecision.TruncateToMicroseconds(nextAttemptAt);
+        ProcessingStartedAt = null;
     }
 }

@@ -2,6 +2,7 @@ using HookHarbor.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
+using HookHarbor.Api.Features.WebhookEvents.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +35,8 @@ if (!builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddHostedService<WebhookDeliveryWorker>();
 }
+
+builder.Services.AddScoped<WebhookEventClaimService>();
 
 var app = builder.Build();
 

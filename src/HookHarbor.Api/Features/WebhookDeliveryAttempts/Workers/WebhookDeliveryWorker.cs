@@ -2,6 +2,7 @@
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookEvents;
 using Microsoft.EntityFrameworkCore;
+using HookHarbor.Api.Features.WebhookEvents.Services;
 
 namespace HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
 
@@ -19,7 +20,7 @@ public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILo
         {
             try
             {
-                var eventIds = await GetPendingEventIdsAsync(cancellationToken);
+                var eventIds = await GetDeliverableEventIdsAsync(cancellationToken);
 
                 foreach (var eventId in eventIds)
                 {
@@ -50,29 +51,31 @@ public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILo
         logger.LogInformation("Webhook delivery worker stopped.");
     }
 
-    private async Task<List<Guid>> GetPendingEventIdsAsync(CancellationToken cancellationToken)
+    private async Task<List<Guid>> GetDeliverableEventIdsAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope =scopeFactory.CreateAsyncScope();
 
-        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
-        
-        var now = DateTimeOffset.UtcNow;
+        var claimService = scope.ServiceProvider.GetRequiredService<WebhookEventClaimService>();
 
-        return await dbContext
-            .WebhookEvents
-            .AsNoTracking()
-            .Where(x => x.Status == WebhookEventStatus.Pending || (x.Status == WebhookEventStatus.RetryScheduled && x.NextAttemptAt <= now))
-            .OrderBy(x => x.NextAttemptAt ?? x.ReceivedAt)
-            .Select(x => x.Id)
-            .Take(BatchSize)
-            .ToListAsync(cancellationToken);
+        return await claimService.GetDeliverableEventIdsAsync(DateTimeOffset.UtcNow, BatchSize, cancellationToken);
     }
 
     private async Task DeliverEventAsync(Guid eventId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
 
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
         var deliveryService = scope.ServiceProvider.GetRequiredService<WebhookDeliveryService>();
+        var claimService = scope.ServiceProvider.GetRequiredService<WebhookEventClaimService>();
+
+        var claimed = await claimService.TryClaimAsync(eventId, DateTimeOffset.UtcNow, cancellationToken);
+
+        if (!claimed)
+        {
+            logger.LogDebug("Webhook event {WebhookEventId} was claimed by another worker.", eventId);
+
+            return;
+        }
 
         try
         {
