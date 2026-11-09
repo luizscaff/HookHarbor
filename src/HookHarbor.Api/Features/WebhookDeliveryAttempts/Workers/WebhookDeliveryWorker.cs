@@ -1,30 +1,43 @@
 ﻿using HookHarbor.Api.Data;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
-using HookHarbor.Api.Features.WebhookEvents;
-using Microsoft.EntityFrameworkCore;
 using HookHarbor.Api.Features.WebhookEvents.Services;
 
 namespace HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
 
-public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILogger<WebhookDeliveryWorker> logger) : BackgroundService
+public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, WebhookEventSignal eventSignal, ILogger<WebhookDeliveryWorker> logger) : BackgroundService
 {
     private const int BatchSize = 20;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
+    private static readonly TimeSpan RecoveryPollInterval = TimeSpan.FromSeconds(30);
+
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Webhook delivery worker started.");
+
+        await ProcessDatabaseBatchAsync(cancellationToken);
 
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                var eventIds = await GetDeliverableEventIdsAsync(cancellationToken);
+                var signalAvailableTask = eventSignal
+                    .Reader
+                    .WaitToReadAsync(cancellationToken)
+                    .AsTask();
 
-                foreach (var eventId in eventIds)
+                var recoveryPollTask = Task.Delay(RecoveryPollInterval, cancellationToken);
+
+                var completedTask = await Task.WhenAny(signalAvailableTask, recoveryPollTask);
+
+                if (completedTask == signalAvailableTask && await signalAvailableTask)
                 {
-                    await DeliverEventAsync(eventId, cancellationToken);
+                    await ProcessSignalAsync(cancellationToken);
+                }
+                else
+                {
+                    await ProcessDatabaseBatchAsync(cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -35,16 +48,6 @@ public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILo
             catch(Exception e)
             {
                 logger.LogError(e, "An error occurred while polling webhook events.");
-            }
-
-            try
-            {
-                await Task.Delay(PollInterval, cancellationToken);
-            }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
-            {
-                break;
             }
         }
 
@@ -89,6 +92,24 @@ public sealed class WebhookDeliveryWorker(IServiceScopeFactory scopeFactory, ILo
         catch (Exception e)
         {
             logger.LogError(e, "Delivery of webhook event {WebhookEventId} failed unexpectedly.", eventId);
+        }
+    }
+
+    private async Task ProcessSignalAsync(CancellationToken cancellationToken)
+    {
+        while (eventSignal.Reader.TryRead(out var eventId))
+        {
+            await DeliverEventAsync(eventId, cancellationToken);
+        }
+    }
+
+    private async Task ProcessDatabaseBatchAsync(CancellationToken cancellationToken)
+    {
+        var eventIds = await GetDeliverableEventIdsAsync(cancellationToken);
+
+        foreach(var eventId in eventIds)
+        {
+            await DeliverEventAsync(eventId, cancellationToken);
         }
     }
 }

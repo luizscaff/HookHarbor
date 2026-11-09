@@ -38,6 +38,8 @@ if (!builder.Environment.IsEnvironment("Testing"))
 
 builder.Services.AddScoped<WebhookEventClaimService>();
 
+builder.Services.AddSingleton<WebhookEventSignal>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

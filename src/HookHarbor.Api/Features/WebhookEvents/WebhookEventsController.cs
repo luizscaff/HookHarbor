@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using HookHarbor.Api.Data;
 using HookHarbor.Api.Features.WebhookEvents.Responses;
+using HookHarbor.Api.Features.WebhookEvents.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +9,7 @@ namespace HookHarbor.Api.Features.WebhookEvents;
 
 [ApiController]
 [Route("in")]
-public class WebhookEventsController(HookHarborDbContext dbContext) : ControllerBase
+public class WebhookEventsController(HookHarborDbContext dbContext, WebhookEventSignal eventSignal, ILogger<WebhookEventsController> logger) : ControllerBase
 {
     private const int MaximumBodySize = 1_048_576; //1 MB
 
@@ -46,6 +47,13 @@ public class WebhookEventsController(HookHarborDbContext dbContext) : Controller
         dbContext.WebhookEvents.Add(webhookEvent);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (!eventSignal.TryPublish(webhookEvent.Id))
+        {
+            logger.LogWarning(
+                "Webhook event {WebhookEventId} was persisted, but its immediate delivery signal could not be queued. It will be recovered by database polling.",
+                webhookEvent.Id);
+        }
 
         return Accepted(WebhookEventAcceptedResponse.FromEntity(webhookEvent));
     }
