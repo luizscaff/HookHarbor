@@ -1,61 +1,31 @@
 ﻿using HookHarbor.Api.Data;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
-using HookHarbor.Api.Features.WebhookEndpoints.Requests;
-using HookHarbor.Api.Features.WebhookEndpoints.Responses;
 using HookHarbor.Api.Features.WebhookEvents;
-using HookHarbor.Api.Features.WebhookEvents.Responses;
 using HookHarbor.Api.Tests.TestInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 
 namespace HookHarbor.Api.Tests;
 
-public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory factory) : IClassFixture<HookHarborWebApplicationFactory>
+public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApplicationFactory>
 {
-    private readonly HookHarborWebApplicationFactory _factory = factory;
+    private readonly HookHarborWebApplicationFactory _factory;
+    private readonly HttpClient _client;
+    private readonly WebhookTestData _testData;
 
-    private readonly HttpClient _client = factory.CreateClient();
-
-    private async Task<Guid> CreateWebhookEventAsync(string destinationUrl, string body)
+    public WebhookDeliveryServiceTests(HookHarborWebApplicationFactory factory)
     {
-        var endpointResponse = await _client.PostAsJsonAsync(
-            "api/endpoints",
-            new CreateWebhookEndpointRequest(
-                $"Endpoint {Guid.NewGuid()}",
-                destinationUrl
-            ));
-
-        endpointResponse.EnsureSuccessStatusCode();
-
-        var endpoint = await endpointResponse
-            .Content
-            .ReadFromJsonAsync<WebhookEndpointResponse>()
-            ?? throw new InvalidOperationException("The endpoint response body was empty.");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/in/{endpoint.InboundKey}");
-
-        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
-        var ingestionResponse = await _client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.Accepted, ingestionResponse.StatusCode);
-
-        var accepted = await ingestionResponse
-            .Content
-            .ReadFromJsonAsync<WebhookEventAcceptedResponse>()
-            ?? throw new InvalidOperationException("The ingestion response body was empty");
-
-        return accepted.Id;
+        _factory = factory;
+        _client = factory.CreateClient();
+        _testData = new WebhookTestData(_client);
     }
 
     [Fact]
     public async Task DeliverAsync_WithSuccessfulResponse_MarksEventDelivered()
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
-
         const string originalBody =
             """
             {
@@ -64,7 +34,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
             }
             """;
 
-        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, originalBody);
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, originalBody);
 
         string? deliveredBody = null;
         string? deliveredContentType = null;
@@ -132,7 +103,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
-        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "test"}""");
 
         var handler = new StubHttpMessageHandler((_, _) => Task.FromResult(
             new HttpResponseMessage(HttpStatusCode.InternalServerError)
@@ -176,7 +148,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
-        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "test"}""");
 
         var handler = new StubHttpMessageHandler((_, _) => throw new HttpRequestException("Connection refused"));
 
@@ -234,7 +207,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
-        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "test"}""");
 
         var handler = new StubHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
 
@@ -264,7 +238,8 @@ public sealed class WebhookDeliveryServiceTests(HookHarborWebApplicationFactory 
     {
         const string destinationUrl = "https://destination.example.com/webhooks";
 
-        var webhookEventId = await CreateWebhookEventAsync(destinationUrl, """{"type": "test"}""");
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "test"}""");
 
         var requestCount = 0;
 

@@ -14,15 +14,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HookHarbor.Api.Tests;
 
-public sealed class WebhookEventClaimServiceTests(HookHarborWebApplicationFactory factory) : IClassFixture<HookHarborWebApplicationFactory>
+public sealed class WebhookEventClaimServiceTests : IClassFixture<HookHarborWebApplicationFactory>
 {
-    private readonly HookHarborWebApplicationFactory _factory = factory;
-    private readonly HttpClient _client = factory.CreateClient();
+    private readonly HookHarborWebApplicationFactory _factory;
+    private readonly HttpClient _client;
+    private readonly WebhookTestData _testData;
+
+    public WebhookEventClaimServiceTests(HookHarborWebApplicationFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+        _testData = new WebhookTestData(_client);
+    }
 
     [Fact]
     public async Task TryClaimAsync_WhenCalledConcurrently_AllowsOnlyOneClaim()
     {
-        var webhookEventId = await CreateWebhookEventAsync();
+        var endpoint = await _testData.CreateEndpointAsync();
+        var webhookEventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "test"}""");
 
         await using var firstScope = _factory.Services.CreateAsyncScope();
         var firstClaimService = firstScope.ServiceProvider.GetRequiredService<WebhookEventClaimService>();
@@ -51,35 +60,5 @@ public sealed class WebhookEventClaimServiceTests(HookHarborWebApplicationFactor
         Assert.Equal(WebhookEventStatus.Processing, storedEvent.Status);
 
         Assert.NotNull(storedEvent.ProcessingStartedAt);
-    }
-
-    private async Task<Guid> CreateWebhookEventAsync()
-    {
-        using var endpointResponse = await _client.PostAsJsonAsync(
-            "/api/endpoints",
-            new CreateWebhookEndpointRequest($"Claim test {Guid.NewGuid()}",
-            "https://destination.example.com/webhooks"));
-
-        endpointResponse.EnsureSuccessStatusCode();
-
-        var endpoint = await endpointResponse
-            .Content
-            .ReadFromJsonAsync<WebhookEndpointResponse>()
-            ?? throw new InvalidOperationException("The endpoint response body was empty.");
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/in/{endpoint.InboundKey}");
-
-        request.Content = new StringContent("""{"type": "claim.test"}""", Encoding.UTF8, "application/json");
-
-        using var response = await _client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-
-        var accepted = await response
-            .Content
-            .ReadFromJsonAsync<WebhookEventAcceptedResponse>()
-            ?? throw new InvalidOperationException("The ingestion response body was empty.");
-
-        return accepted.Id;
     }
 }
