@@ -25,3 +25,11 @@ X-Webhook-Source: manual-test
   "type": "worker.test",
   "message": "Hello from HookHarbor"
 }
+
+###
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/YOUR_ENDPOINT_ID/events?page=1&pageSize=20
+Accept: application/json
+
+###
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/YOUR_ENDPOINT_ID/events?status=Failed
+Accept: application/json
