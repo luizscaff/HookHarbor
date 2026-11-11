@@ -1,6 +1,5 @@
 ﻿using HookHarbor.Api.Features.WebhookEndpoints;
 using HookHarbor.Api.Common;
-using System.Security.Cryptography.X509Certificates;
 
 namespace HookHarbor.Api.Features.WebhookEvents;
 

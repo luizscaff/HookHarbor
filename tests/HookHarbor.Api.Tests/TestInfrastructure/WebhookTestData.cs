@@ -35,11 +35,20 @@ public sealed class WebhookTestData(HttpClient client)
     public async Task<Guid> CreateEventAsync(
         string inboundKey,
         string body,
+        IReadOnlyDictionary<string, string>? headers = null,
         CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/in/{inboundKey}");
 
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        if (headers is not null)
+        {
+            foreach (var header in headers)
+            {
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
 
         using var response = await client.SendAsync(request, cancellationToken);
 

@@ -1,4 +1,6 @@
-﻿using HookHarbor.Api.Common;
+﻿using System.Text;
+using System.Text.Json;
+using HookHarbor.Api.Common;
 using HookHarbor.Api.Data;
 using Microsoft.AspNetCore.Mvc;
 using HookHarbor.Api.Features.WebhookEvents.Responses;
@@ -55,5 +57,55 @@ public sealed class WebhookEventQueriesController(HookHarborDbContext dbContext)
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResponse<WebhookEventSummaryResponse>(items, request.Page, request.PageSize, totalCount));
+    }
+
+    [HttpGet("/api/events/{eventId:guid}")]
+    public async Task<ActionResult<WebhookEventDetailResponse>> GetById(Guid eventId, CancellationToken cancellationToken)
+    {
+        var webhookEvent = await dbContext
+            .WebhookEvents
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == eventId, cancellationToken);
+
+        if (webhookEvent is null)
+        {
+            return NotFound();
+        }
+
+        var storedAttempts = await dbContext
+            .WebhookDeliveryAttempts
+            .AsNoTracking()
+            .Where(x => x.WebhookEventId == eventId)
+            .OrderBy(x => x.AttemptNumber)
+            .ToListAsync(cancellationToken);
+
+        var attempts = storedAttempts
+            .Select(x => new WebhookDeliveryAttemptResponse(
+                x.Id,
+                x.AttemptNumber,
+                x.DestinationUrl,
+                x.StartedAt,
+                x.CompletedAt,
+                x.ResponseStatusCode,
+                x.ResponseBody is null ? null : Encoding.UTF8.GetString(x.ResponseBody),
+                x.ErrorMessage,
+                x.Succeeded))
+            .ToList();
+
+        var headers = JsonSerializer.Deserialize<Dictionary<string, string[]>>(webhookEvent.Headers) ?? [];
+
+        var response = new WebhookEventDetailResponse(
+            webhookEvent.Id,
+            webhookEvent.WebhookEndpointId,
+            webhookEvent.Status.ToString(),
+            webhookEvent.ReceivedAt,
+            webhookEvent.ContentType,
+            headers,
+            Encoding.UTF8.GetString(webhookEvent.Body),
+            webhookEvent.NextAttemptAt,
+            webhookEvent.ProcessingStartedAt,
+            attempts);
+
+        return Ok(response);
     }
 }

@@ -6,6 +6,8 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using HookHarbor.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 
 namespace HookHarbor.Api.Tests;
 
@@ -146,5 +148,103 @@ public sealed class WebhookEventQueryTests : IClassFixture<HookHarborWebApplicat
         using var response = await _client.GetAsync($"/api/endpoints/{endpoint.Id}/events" + $"?page={page}&pageSize={pageSize}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetById_WithExistingEvent_ReturnsEventDetails()
+    {
+        const string body =
+            """
+            {
+                "type": "payment.succeeded",
+                "paymentId": "pay_123"
+            }
+            """;
+
+        var endpoint = await _testData.CreateEndpointAsync();
+
+        var eventId = await _testData.CreateEventAsync(
+            endpoint.InboundKey,
+            body,
+            new Dictionary<string, string> { ["X-Webhook-Source"] = "manual-test" });
+
+        using var response = await _client.GetAsync($"/api/events/{eventId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var result = await response
+            .Content
+            .ReadFromJsonAsync<WebhookEventDetailResponse>()
+            ?? throw new InvalidOperationException("The event-detail response body was empty.");
+
+        Assert.Equal(eventId, result.Id);
+        Assert.Equal(endpoint.Id, result.WebhookEndpointId);
+        Assert.Equal("Pending", result.Status);
+        Assert.Equal("application/json; charset=utf-8", result.ContentType);
+        Assert.Equal(body, result.Body);
+        Assert.Null(result.NextAttemptAt);
+        Assert.Null(result.ProcessingStartedAt);
+        Assert.Empty(result.Attempts);
+        Assert.True(result.Headers.TryGetValue("X-Webhook-Source", out var sourceHeader));
+        Assert.Contains("manual-test", sourceHeader);
+    }
+
+    [Fact]
+    public async Task GetById_WithUnknownEvent_ReturnsNotFound()
+    {
+        using var response = await _client.GetAsync($"/api/events/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetById_AfterSuccessfulDelivery_ReturnsDeliveryAttempt()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+
+        var eventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type": "payment.succeeded"}""");
+
+        var handler = new StubHttpMessageHandler(
+            (_, _) => Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"received": true}""", Encoding.UTF8, "application/json")
+                }));
+
+        using var deliveryHttpClient = new HttpClient(handler);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope
+                .ServiceProvider
+                .GetRequiredService<HookHarborDbContext>();
+
+            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient);
+
+            await deliveryService.DeliverAsync(eventId, CancellationToken.None);
+        }
+
+        using var response = await _client.GetAsync($"/api/events/{eventId}");
+
+        response.EnsureSuccessStatusCode();
+
+        var result = await response
+            .Content
+            .ReadFromJsonAsync<WebhookEventDetailResponse>()
+            ?? throw new InvalidOperationException("The event-detail response body was empty.");
+
+        Assert.Equal("Delivered", result.Status);
+
+        var attempt = Assert.Single(result.Attempts);
+
+        Assert.Equal(1, attempt.AttemptNumber);
+        Assert.Equal(destinationUrl, attempt.DestinationUrl);
+        Assert.Equal(200, attempt.ResponseStatusCode);
+        Assert.Equal("""{"received": true}""", attempt.ResponseBody);
+        Assert.True(attempt.Succeeded);
+        Assert.NotNull(attempt.CompletedAt);
+        Assert.Null(attempt.ErrorMessage);
     }
 }

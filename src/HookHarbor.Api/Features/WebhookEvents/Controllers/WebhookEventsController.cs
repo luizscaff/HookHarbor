@@ -5,7 +5,7 @@ using HookHarbor.Api.Features.WebhookEvents.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace HookHarbor.Api.Features.WebhookEvents;
+namespace HookHarbor.Api.Features.WebhookEvents.Controllers;
 
 [ApiController]
 [Route("in")]

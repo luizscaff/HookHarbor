@@ -1,35 +1,85 @@
 @HookHarbor.Api_HostAddress = http://localhost:5226
 
+# Replace these values while following the manual test flow.
+@destinationUrl = https://webhook.site/replace-with-your-temporary-id
+@endpointId = replace-with-endpoint-id
+@inboundKey = replace-with-inbound-key
+@eventId = replace-with-event-id
+
+
+### Health check
+
 GET {{HookHarbor.Api_HostAddress}}/health
 Accept: text/plain
 
-###
+
+### 1. Create a webhook endpoint
+# Copy the returned id and inboundKey into the variables above.
+
 POST {{HookHarbor.Api_HostAddress}}/api/endpoints
 Content-Type: application/json
+Accept: application/json
+
 {
-  "name": "Worker success test",
-  "destinationUrl": "https://webhook.site/YOUR-UNIQUE-ID"
+  "name": "Manual delivery test",
+  "destinationUrl": "{{destinationUrl}}"
 }
 
-###
-GET {{HookHarbor.Api_HostAddress}}/api/endpoints/replace-with-created-id
+
+### 2. Get the created endpoint
+
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}
 Accept: application/json
 
-###
-POST {{HookHarbor.Api_HostAddress}}/in/replace-with-inbound-key
-Accept: application/json
+
+### 3. Receive an inbound webhook
+# Copy the returned event id into the eventId variable above.
+
+POST {{HookHarbor.Api_HostAddress}}/in/{{inboundKey}}
 Content-Type: application/json
+Accept: application/json
 X-Webhook-Source: manual-test
+X-Webhook-Event-Type: payment.succeeded
 
 {
-  "type": "worker.test",
-  "message": "Hello from HookHarbor"
+  "type": "payment.succeeded",
+  "paymentId": "pay_123",
+  "amount": 14990,
+  "currency": "BRL"
 }
 
-###
-GET {{HookHarbor.Api_HostAddress}}/api/endpoints/YOUR_ENDPOINT_ID/events?page=1&pageSize=20
+
+### 4. List events for the endpoint
+
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20
 Accept: application/json
 
-###
-GET {{HookHarbor.Api_HostAddress}}/api/endpoints/YOUR_ENDPOINT_ID/events?status=Failed
+
+### 5. List failed events for the endpoint
+
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20&status=Failed
+Accept: application/json
+
+
+### 6. List delivered events for the endpoint
+
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20&status=Delivered
+Accept: application/json
+
+
+### 7. Get complete event details and delivery attempts
+
+GET {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}
+Accept: application/json
+
+
+### Diagnostic example: unknown event returns 404
+
+GET {{HookHarbor.Api_HostAddress}}/api/events/00000000-0000-0000-0000-000000000000
+Accept: application/json
+
+
+### Validation example: invalid pagination returns 400
+
+GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=0&pageSize=200
 Accept: application/json
