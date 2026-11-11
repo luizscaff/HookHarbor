@@ -29,9 +29,25 @@ public sealed class WebhookEndpoint
         }
 
         Id = Guid.NewGuid();
-        Name = name.Trim();
         InboundKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
-        DestinationUrl = uri.AbsoluteUri;
         CreatedAt = DateTimePrecision.TruncateToMicroseconds(DateTimeOffset.UtcNow);
+
+        Update(name, destinationUrl);
+    }
+
+    public void Update(string name, string destinationUrl)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Endpoint name is required.", nameof(name));
+        }
+
+        if (!Uri.TryCreate(destinationUrl, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("Destination must be an absolut HTTP or HTTPS URL.", nameof(destinationUrl));
+        }
+
+        Name = name.Trim();
+        DestinationUrl = uri.AbsoluteUri;
     }
 }

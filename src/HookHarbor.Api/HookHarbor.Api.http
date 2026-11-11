@@ -88,3 +88,14 @@ Accept: application/json
 
 POST {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}/retry
 Accept: application/json
+
+### Update a webhook endpoint
+
+PUT {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Updated payment endpoint",
+  "destinationUrl": "{{destinationUrl}}"
+}

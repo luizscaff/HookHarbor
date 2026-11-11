@@ -54,4 +54,33 @@ public sealed class WebhookEndpointsController(HookHarborDbContext dbContext) : 
     {
         return Uri.TryCreate(destinationUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
+
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType<WebhookEndpointResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<WebhookEndpointResponse>> Update(Guid id, UpdateWebhookEndpointRequest request, CancellationToken cancellationToken)
+    {
+        if (!IsValidDestinationUrl(request.DestinationUrl))
+        {
+            ModelState.AddModelError(nameof(request.DestinationUrl), "Destination must be an absolute HTTP or HTTPS URL.");
+
+            return ValidationProblem(ModelState);
+        }
+
+        var endpoint = await dbContext
+            .WebhookEndpoints
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (endpoint is null)
+        {
+            return NotFound();
+        }
+
+        endpoint.Update(request.Name, request.DestinationUrl);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Ok(WebhookEndpointResponse.FromEntity(endpoint));
+    }
 }
