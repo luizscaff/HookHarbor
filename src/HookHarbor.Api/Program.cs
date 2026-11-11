@@ -1,7 +1,11 @@
 using HookHarbor.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
+using System.Threading.RateLimiting;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
+using HookHarbor.Api.Features.WebhookEvents.Configuration;
 using HookHarbor.Api.Features.WebhookEvents.Services;
 using HookHarbor.Api.Security;
 
@@ -47,6 +51,44 @@ builder.Services
     .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Management API key must be configured.")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<InboundWebhookRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(InboundWebhookRateLimitOptions.SectionName))
+    .Validate(options => options.PermitLimit > 0, "Inbound webhook permit limit must be greater than zero.")
+    .Validate(options => options.WindowSeconds > 0, "Inbound webhook rate-limit window must be greater than zero.")
+    .ValidateOnStart();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("InboundWebhooks", httpContext =>
+    {
+        var rateLimitOptions = httpContext
+            .RequestServices
+            .GetRequiredService<IOptions<InboundWebhookRateLimitOptions>>()
+            .Value;
+
+        var partitionKey = httpContext
+            .Connection
+            .RemoteIpAddress
+            ?.ToString()
+            ?? "unknown";
+
+        return RateLimitPartition
+            .GetFixedWindowLimiter(
+                partitionKey: partitionKey,
+                factory: _ =>
+                    new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = rateLimitOptions.PermitLimit,
+                        Window = TimeSpan.FromSeconds(rateLimitOptions.WindowSeconds),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }
+            );
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -56,9 +98,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseRouting();
+app.UseRateLimiter();
 app.UseMiddleware<ManagementApiKeyMiddleware>();
-
 app.UseAuthorization();
 
 app.MapControllers();

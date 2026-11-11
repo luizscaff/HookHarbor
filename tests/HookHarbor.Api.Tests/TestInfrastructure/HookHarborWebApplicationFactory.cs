@@ -9,7 +9,7 @@ using Testcontainers.PostgreSql;
 
 namespace HookHarbor.Api.Tests.TestInfrastructure;
 
-public sealed class HookHarborWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class HookHarborWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres =
         new PostgreSqlBuilder("postgres:18-alpine")

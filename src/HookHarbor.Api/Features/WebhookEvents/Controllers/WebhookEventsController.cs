@@ -4,6 +4,7 @@ using HookHarbor.Api.Features.WebhookEvents.Responses;
 using HookHarbor.Api.Features.WebhookEvents.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace HookHarbor.Api.Features.WebhookEvents.Controllers;
 
@@ -14,6 +15,7 @@ public class WebhookEventsController(HookHarborDbContext dbContext, WebhookEvent
     private const int MaximumBodySize = 1_048_576; //1 MB
 
     [HttpPost("{inboundKey}")]
+    [EnableRateLimiting("InboundWebhooks")]
     [RequestSizeLimit(MaximumBodySize)]
     public async Task<ActionResult<WebhookEventAcceptedResponse>> Receive(string inboundKey, CancellationToken cancellationToken)
     {
