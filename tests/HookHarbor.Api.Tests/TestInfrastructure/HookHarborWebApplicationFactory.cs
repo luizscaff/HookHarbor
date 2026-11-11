@@ -1,4 +1,5 @@
 ﻿using HookHarbor.Api.Data;
+using HookHarbor.Api.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,8 @@ public sealed class HookHarborWebApplicationFactory : WebApplicationFactory<Prog
             .WithPassword("hookharbor_tests_password")
             .Build();
 
+    public const string TestManagementApiKey = "hookharbor-integration-test-api";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -26,10 +29,18 @@ public sealed class HookHarborWebApplicationFactory : WebApplicationFactory<Prog
             configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:Database"] = _postgres.GetConnectionString()
+                    ["ConnectionStrings:Database"] = _postgres.GetConnectionString(),
+                    ["ManagementApi:ApiKey"] = TestManagementApiKey
                 }
             );
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+
+        client.DefaultRequestHeaders.Add(ManagementApiKeyMiddleware.HeaderName, TestManagementApiKey);
     }
 
     public async Task InitializeAsync()

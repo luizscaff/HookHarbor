@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
 using HookHarbor.Api.Features.WebhookEvents.Services;
+using HookHarbor.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,12 @@ builder.Services.AddScoped<WebhookEventClaimService>();
 
 builder.Services.AddSingleton<WebhookEventSignal>();
 
+builder.Services
+    .AddOptions<ManagementApiKeyOptions>()
+    .Bind(builder.Configuration.GetSection(ManagementApiKeyOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Management API key must be configured.")
+    .ValidateOnStart();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -49,6 +56,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseMiddleware<ManagementApiKeyMiddleware>();
 
 app.UseAuthorization();
 
