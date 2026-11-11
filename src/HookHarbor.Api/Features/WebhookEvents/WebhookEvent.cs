@@ -80,4 +80,16 @@ public class WebhookEvent
         NextAttemptAt = DateTimePrecision.TruncateToMicroseconds(nextAttemptAt);
         ProcessingStartedAt = null;
     }
+
+    public void ScheduleManualRetry(DateTimeOffset requestedAt)
+    {
+        if (Status != WebhookEventStatus.Failed)
+        {
+            throw new InvalidOperationException("Only failed webhook events can be manually retried.");
+        }
+
+        Status = WebhookEventStatus.RetryScheduled;
+        NextAttemptAt = DateTimePrecision.TruncateToMicroseconds(requestedAt);
+        ProcessingStartedAt = null;
+    }
 }

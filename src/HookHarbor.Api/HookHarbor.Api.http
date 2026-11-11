@@ -83,3 +83,8 @@ Accept: application/json
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=0&pageSize=200
 Accept: application/json
+
+### Manually retry a failed event
+
+POST {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}/retry
+Accept: application/json
