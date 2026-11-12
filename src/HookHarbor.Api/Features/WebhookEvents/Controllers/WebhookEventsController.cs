@@ -5,6 +5,7 @@ using HookHarbor.Api.Features.WebhookEvents.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
+using HookHarbor.Api.Security;
 
 namespace HookHarbor.Api.Features.WebhookEvents.Controllers;
 
@@ -32,10 +33,10 @@ public class WebhookEventsController(HookHarborDbContext dbContext, WebhookEvent
 
         await Request.Body.CopyToAsync(stream, cancellationToken);
 
-        var headers = Request.Headers.ToDictionary(
-                header => header.Key,
-                header => header.Value.ToArray(),
-                StringComparer.OrdinalIgnoreCase);
+        var headers = Request
+            .Headers
+            .Where(header => !string.Equals(header.Key, ManagementApiKeyMiddleware.HeaderName, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(header => header.Key, header => header.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
 
         var serializedHeaders = JsonSerializer.Serialize(headers);
 
