@@ -299,4 +299,60 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
         Assert.True(attempts[1].Succeeded);
         Assert.Equal(200, attempts[1].ResponseStatusCode);
     }
+
+    [Fact]
+    public async Task DeliverAsync_ForwardsProviderHeadersButExcludesInternalHeaders()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+        const string stripeSignature = "t=1731000000,v1=test-signature";
+
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+
+        var eventId = await _testData.CreateEventAsync(
+            endpoint.InboundKey,
+            """{"type": "payment.succeeded"}""",
+            new Dictionary<string, string>
+            {
+                ["Stripe-Signature"] = stripeSignature,
+                ["X-Custom-Provider-Header"] = "custom-value"
+            }
+        );
+
+        string? deliveredStripeSignature = null;
+        string? deliveredCustomHeader = null;
+        bool managementApiKeyWasForwarded = false;
+
+        var handler = new StubHttpMessageHandler(
+            (request, _) =>
+            {
+                if (request.Headers.TryGetValues("Stripe-Signature", out var signatureValues))
+                {
+                    deliveredStripeSignature = signatureValues.Single();
+                }
+
+                if (request.Headers.TryGetValues("X-Custom-Provider-Header", out var customValues))
+                {
+                    deliveredCustomHeader = customValues.Single();
+                }
+
+                managementApiKeyWasForwarded = request.Headers.Contains("X-HookHarbor-Api-Key") || request.Content?.Headers.Contains("X-HookHarbor-Api-Key") == true;
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        );
+
+        using var deliveryHttpClient = new HttpClient(handler);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient);
+
+        await service.DeliverAsync(eventId, CancellationToken.None);
+
+        Assert.Equal(stripeSignature, deliveredStripeSignature);
+        Assert.Equal("custom-value", deliveredCustomHeader);
+        Assert.False(managementApiKeyWasForwarded);
+    }
 }

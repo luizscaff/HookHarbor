@@ -1,11 +1,29 @@
 ﻿using HookHarbor.Api.Data;
 using HookHarbor.Api.Features.WebhookEvents;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 
 public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpClient httpClient)
 {
+    private static readonly HashSet<string> ExcludedForwardingHeaders =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Host",
+            "Content-Length",
+            "Content-Type",
+            "Connection",
+            "Keep-Alive",
+            "Proxy-Authenticate",
+            "Proxy-Authorization",
+            "TE",
+            "Trailer",
+            "Transfer-Encoding",
+            "Upgrade",
+            "X-HookHarbor-Api-Key"
+        };
+
     public async Task DeliverAsync(Guid webhookEventId, CancellationToken cancellationToken)
     {
         var webhookEvent = await dbContext
@@ -47,6 +65,8 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
         {
             request.Content.Headers.TryAddWithoutValidation("Content-Type", webhookEvent.ContentType);
         }
+
+        ForwardOriginalHeaders(request, webhookEvent.Headers);
 
         try
         {
@@ -108,5 +128,25 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
         }
 
         webhookEvent.MarkFailed();
+    }
+
+    private static void ForwardOriginalHeaders(HttpRequestMessage request, string serializedHeaders)
+    {
+        var headers = JsonSerializer.Deserialize<Dictionary<string, string[]>>(serializedHeaders) ?? [];
+
+        foreach (var header in headers)
+        {
+            if (ExcludedForwardingHeaders.Contains(header.Key))
+            {
+                continue;
+            }
+
+            if (request.Headers.TryAddWithoutValidation(header.Key, header.Value))
+            {
+                continue;
+            }
+
+            request.Content?.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
     }
 }
