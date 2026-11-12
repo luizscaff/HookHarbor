@@ -5,6 +5,7 @@ public sealed record WebhookEndpointResponse(
     string Name,
     string InboundKey,
     string DestinationUrl,
+    string SigningSecret,
     DateTimeOffset CreatedAt)
 {
     public static WebhookEndpointResponse FromEntity(WebhookEndpoint endpoint)
@@ -14,6 +15,7 @@ public sealed record WebhookEndpointResponse(
             endpoint.Name,
             endpoint.InboundKey,
             endpoint.DestinationUrl,
+            endpoint.SigningSecret,
             endpoint.CreatedAt
         );
     }

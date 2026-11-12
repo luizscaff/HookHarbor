@@ -44,6 +44,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
 builder.Services.AddScoped<WebhookEventClaimService>();
 
 builder.Services.AddSingleton<WebhookEventSignal>();
+builder.Services.AddSingleton<WebhookSignatureService>();
 
 builder.Services
     .AddOptions<ManagementApiKeyOptions>()

@@ -9,6 +9,7 @@ public sealed class WebhookEndpoint
     public string Name { get; private set; } = string.Empty;
     public string InboundKey { get; private set; } = string.Empty;
     public string DestinationUrl { get; private set; } = string.Empty;
+    public string SigningSecret { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; private set; }
 
     private WebhookEndpoint()
@@ -30,6 +31,7 @@ public sealed class WebhookEndpoint
 
         Id = Guid.NewGuid();
         InboundKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+        SigningSecret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         CreatedAt = DateTimePrecision.TruncateToMicroseconds(DateTimeOffset.UtcNow);
 
         Update(name, destinationUrl);

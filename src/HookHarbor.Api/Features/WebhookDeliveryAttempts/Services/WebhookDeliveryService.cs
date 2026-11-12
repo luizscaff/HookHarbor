@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 
-public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpClient httpClient)
+public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpClient httpClient, WebhookSignatureService signatureService)
 {
     private static readonly HashSet<string> ExcludedForwardingHeaders =
         new(StringComparer.OrdinalIgnoreCase)
@@ -67,6 +67,14 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
         }
 
         ForwardOriginalHeaders(request, webhookEvent.Headers);
+
+        var signatureTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signature = signatureService.CreateSignature(webhookEvent.WebhookEndpoint.SigningSecret, signatureTimestamp, webhookEvent.Body);
+
+        request.Headers.TryAddWithoutValidation(WebhookSignatureHeaders.EventId, webhookEvent.Id.ToString());
+        request.Headers.TryAddWithoutValidation(WebhookSignatureHeaders.DeliveryId, attempt.Id.ToString());
+        request.Headers.TryAddWithoutValidation(WebhookSignatureHeaders.Timestamp, signatureTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        request.Headers.TryAddWithoutValidation(WebhookSignatureHeaders.Signature, signature);
 
         try
         {

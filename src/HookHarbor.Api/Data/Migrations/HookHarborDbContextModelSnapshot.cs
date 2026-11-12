@@ -103,6 +103,12 @@ namespace HookHarbor.Api.Data.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("name");
 
+                    b.Property<string>("SigningSecret")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("signing_secret");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InboundKey")

@@ -41,7 +41,7 @@ public sealed class WebhookEventCommandTests : IClassFixture<HookHarborWebApplic
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient);
+            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
 
             await deliveryService.DeliverAsync(eventId, CancellationToken.None);
         }

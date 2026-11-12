@@ -69,7 +69,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -118,7 +118,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -159,7 +159,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -195,7 +195,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeliverAsync(Guid.NewGuid(), CancellationToken.None));
 
@@ -218,7 +218,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -267,7 +267,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient);
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -347,12 +347,60 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient);
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
 
         await service.DeliverAsync(eventId, CancellationToken.None);
 
         Assert.Equal(stripeSignature, deliveredStripeSignature);
         Assert.Equal("custom-value", deliveredCustomHeader);
         Assert.False(managementApiKeyWasForwarded);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_AddsVerifiableHookHarborSignatureHeaders()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+        const string body = """{"type": "payment.succeeded"}""";
+
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var eventId = await _testData.CreateEventAsync(endpoint.InboundKey, body);
+
+        string? deliveredEventId = null;
+        string? deliveredDeliveryId = null;
+        string? deliveredTimestamp = null;
+        string? deliveredSignature = null;
+
+        var handler = new StubHttpMessageHandler(
+            (request, _) =>
+            {
+                deliveredEventId = request.Headers.GetValues(WebhookSignatureHeaders.EventId).Single();
+                deliveredDeliveryId = request.Headers.GetValues(WebhookSignatureHeaders.DeliveryId).Single();
+                deliveredTimestamp = request.Headers.GetValues(WebhookSignatureHeaders.Timestamp).Single();
+                deliveredSignature = request.Headers.GetValues(WebhookSignatureHeaders.Signature).Single();
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        );
+
+        using var deliveryHttpClient = new HttpClient(handler);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+
+        var signatureService = new WebhookSignatureService();
+
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, signatureService);
+
+        await service.DeliverAsync(eventId, CancellationToken.None);
+
+        Assert.Equal(eventId.ToString(), deliveredEventId);
+        Assert.True(Guid.TryParse(deliveredDeliveryId, out var deliveryId));
+        Assert.NotEqual(Guid.Empty, deliveryId);
+        Assert.True(long.TryParse(deliveredTimestamp, out var timestamp));
+
+        var expectedSignature = signatureService.CreateSignature(endpoint.SigningSecret, timestamp, Encoding.UTF8.GetBytes(body));
+
+        Assert.Equal(expectedSignature, deliveredSignature);
     }
 }

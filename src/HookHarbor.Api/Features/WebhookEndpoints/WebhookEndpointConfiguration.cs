@@ -33,6 +33,11 @@ public sealed class WebhookEndpointConfiguration : IEntityTypeConfiguration<Webh
             .HasMaxLength(2048)
             .IsRequired();
 
+        builder.Property(x => x.SigningSecret)
+            .HasColumnName("signing_secret")
+            .HasMaxLength(64)
+            .IsRequired();
+
         builder.Property(x=> x.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
