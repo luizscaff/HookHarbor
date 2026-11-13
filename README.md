@@ -587,3 +587,7 @@ Potential post-MVP work includes:
 ## Project status
 
 HookHarbor is currently approaching its first MVP release. The core ingestion, delivery, retry, diagnostics, security, testing, and Docker deployment flows are implemented.
+
+## License
+
+HookHarbor is available under the [MIT License](LICENSE).
