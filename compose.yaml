@@ -1,12 +1,13 @@
 services:
   postgres:
     image: postgres:18-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - hookharbor-postgres-data:/var/lib/postgresql
     healthcheck:
@@ -17,7 +18,51 @@ services:
         ]
       interval: 5s
       timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  hookharbor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+
+      ConnectionStrings__Database: >-
+        Host=postgres;
+        Port=5432;
+        Database=${POSTGRES_DB};
+        Username=${POSTGRES_USER};
+        Password=${POSTGRES_PASSWORD}
+
+      ManagementApi__ApiKey: ${MANAGEMENT_API_KEY}
+
+      Database__MigrateOnStartup: "true"
+
+      RateLimits__InboundWebhooks__PermitLimit: ${INBOUND_RATE_LIMIT:-120}
+      RateLimits__InboundWebhooks__WindowSeconds: ${INBOUND_RATE_WINDOW_SECONDS:-60}
+
+      WebhookDelivery__MaximumCapturedResponseBodyBytes: ${MAXIMUM_CAPTURED_RESPONSE_BYTES:-1048576}
+    ports:
+      - "${HOOKHARBOR_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "http://localhost:8080/health"
+        ]
+      interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 15s
 
 volumes:
-  hookharbor-postgres-data:  
+  hookharbor-postgres-data:

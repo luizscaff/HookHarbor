@@ -1,4 +1,5 @@
-@HookHarbor.Api_HostAddress = http://localhost:5226
+@HookHarbor.Api_HostAddress = http://localhost:8080
+@managementApiKey = replace-with-your-local-key
 
 # Replace these values while following the manual test flow.
 @destinationUrl = https://webhook.site/replace-with-your-temporary-id
@@ -19,6 +20,7 @@ Accept: text/plain
 POST {{HookHarbor.Api_HostAddress}}/api/endpoints
 Content-Type: application/json
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 {
   "name": "Manual delivery test",
@@ -30,7 +32,7 @@ Accept: application/json
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}
 Accept: application/json
-
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 ### 3. Receive an inbound webhook
 # Copy the returned event id into the eventId variable above.
@@ -53,49 +55,73 @@ X-Webhook-Event-Type: payment.succeeded
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 
 ### 5. List failed events for the endpoint
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20&status=Failed
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 
 ### 6. List delivered events for the endpoint
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=1&pageSize=20&status=Delivered
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 
 ### 7. Get complete event details and delivery attempts
 
 GET {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 
 ### Diagnostic example: unknown event returns 404
 
 GET {{HookHarbor.Api_HostAddress}}/api/events/00000000-0000-0000-0000-000000000000
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 
 ### Validation example: invalid pagination returns 400
 
 GET {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}/events?page=0&pageSize=200
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
+
 
 ### Manually retry a failed event
 
 POST {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}/retry
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
+
 
 ### Update a webhook endpoint
 
 PUT {{HookHarbor.Api_HostAddress}}/api/endpoints/{{endpointId}}
 Content-Type: application/json
 Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}
 
 {
   "name": "Updated payment endpoint",
   "destinationUrl": "{{destinationUrl}}"
 }
+
+
+### Authentication example: missing management key returns 401
+
+GET {{HookHarbor.Api_HostAddress}}/api/events/00000000-0000-0000-0000-000000000000
+Accept: application/json
+
+
+### Manually retry a failed event
+# Returns 409 if the event is Pending, Processing, RetryScheduled or Delivered.
+
+POST {{HookHarbor.Api_HostAddress}}/api/events/{{eventId}}/retry
+Accept: application/json
+X-HookHarbor-Api-Key: {{managementApiKey}}

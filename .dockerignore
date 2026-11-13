@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
+**/*.suo
+
+.git/
+.github/
+.vs/
+.vscode/
+
+.env
+.env.*
+!.env.example
+
+README.md
+LICENSE
