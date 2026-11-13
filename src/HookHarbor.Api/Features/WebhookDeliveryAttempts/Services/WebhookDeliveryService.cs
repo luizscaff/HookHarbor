@@ -1,11 +1,17 @@
 ﻿using HookHarbor.Api.Data;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
 using HookHarbor.Api.Features.WebhookEvents;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 
-public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpClient httpClient, WebhookSignatureService signatureService)
+public sealed class WebhookDeliveryService(
+    HookHarborDbContext dbContext,
+    HttpClient httpClient,
+    WebhookSignatureService signatureService,
+    IOptions<WebhookDeliveryOptions> deliveryOptions)
 {
     private static readonly HashSet<string> ExcludedForwardingHeaders =
         new(StringComparer.OrdinalIgnoreCase)
@@ -84,16 +90,15 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken);
 
-            var responseBody = await response
-                .Content
-                .ReadAsByteArrayAsync(cancellationToken);
+            var capturedResponse = await ReadResponseBodyAsync(response.Content, deliveryOptions.Value.MaximumCapturedResponseBodyBytes, cancellationToken);
 
             var completedAt = DateTimeOffset.UtcNow;
 
             attempt.Complete(
                 (int)response.StatusCode,
-                responseBody,
-                completedAt);
+                capturedResponse.Body,
+                completedAt,
+                capturedResponse.Truncated);
 
             UpdateEventStatus(webhookEvent, attempt, completedAt);
         }
@@ -157,4 +162,45 @@ public sealed class WebhookDeliveryService(HookHarborDbContext dbContext, HttpCl
             request.Content?.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
     }
+
+    private static async Task<CapturedResponseBody> ReadResponseBodyAsync(
+        HttpContent content,
+        int maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var responseStream = await content.ReadAsStreamAsync(cancellationToken);
+
+        using var capturedStream = new MemoryStream(capacity: Math.Min(maximumBytes, 81_920));
+
+        var buffer = new byte[Math.Min(maximumBytes, 81_920)];
+
+        var remainingBytes = maximumBytes;
+
+        while (remainingBytes > 0)
+        {
+            var bytesRead = await responseStream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remainingBytes)), cancellationToken);
+
+            if (bytesRead == 0)
+            {
+                return new CapturedResponseBody(capturedStream.ToArray(), Truncated: false);
+            }
+
+            await capturedStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+
+            remainingBytes -= bytesRead;
+        }
+
+        if (content.Headers.ContentLength is long contentLength && contentLength > maximumBytes)
+        {
+            return new CapturedResponseBody(capturedStream.ToArray(), Truncated: true);
+        }
+
+        var extraByte = new byte[1];
+
+        var extraBytesRead = await responseStream.ReadAsync(extraByte, cancellationToken);
+
+        return new CapturedResponseBody(capturedStream.ToArray(), Truncated: extraBytesRead > 0);
+    }
+
+    private sealed record CapturedResponseBody(byte[] Body, bool Truncated);
 }

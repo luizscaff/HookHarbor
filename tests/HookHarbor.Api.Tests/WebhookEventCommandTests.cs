@@ -1,4 +1,5 @@
 ﻿using HookHarbor.Api.Data;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookEvents;
 using HookHarbor.Api.Features.WebhookEvents.Responses;
@@ -6,6 +7,7 @@ using HookHarbor.Api.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -41,7 +43,7 @@ public sealed class WebhookEventCommandTests : IClassFixture<HookHarborWebApplic
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
+            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
             await deliveryService.DeliverAsync(eventId, CancellationToken.None);
         }

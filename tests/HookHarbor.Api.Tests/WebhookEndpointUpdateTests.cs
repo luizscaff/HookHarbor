@@ -1,11 +1,13 @@
 ﻿using Docker.DotNet.Models;
 using HookHarbor.Api.Data;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookEndpoints.Requests;
 using HookHarbor.Api.Features.WebhookEndpoints.Responses;
 using HookHarbor.Api.Tests.TestInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Org.BouncyCastle.Asn1.Ocsp;
 using System.Net;
 using System.Net.Http.Json;
@@ -101,7 +103,7 @@ public sealed class WebhookEndpointUpdateTests : IClassFixture<HookHarborWebAppl
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
+            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
             await deliveryService.DeliverAsync(eventId, CancellationToken.None);
         }

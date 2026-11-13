@@ -1,8 +1,8 @@
 using HookHarbor.Api.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using System.Threading.RateLimiting;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Workers;
 using HookHarbor.Api.Features.WebhookEvents.Configuration;
@@ -89,6 +89,12 @@ builder.Services.AddRateLimiter(options =>
             );
     });
 });
+
+builder.Services
+    .AddOptions<WebhookDeliveryOptions>()
+    .Bind(builder.Configuration.GetSection(WebhookDeliveryOptions.SectionName))
+    .Validate(options => options.MaximumCapturedResponseBodyBytes > 0, "Maximum captured response body size must be greater than zero.")
+    .ValidateOnStart();
 
 var app = builder.Build();
 

@@ -51,6 +51,10 @@ namespace HookHarbor.Api.Data.Migrations
                         .HasColumnType("bytea")
                         .HasColumnName("response_body");
 
+                    b.Property<bool>("ResponseBodyTruncated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("response_body_truncated");
+
                     b.Property<int?>("ResponseStatusCode")
                         .HasColumnType("integer")
                         .HasColumnName("response_status_code");

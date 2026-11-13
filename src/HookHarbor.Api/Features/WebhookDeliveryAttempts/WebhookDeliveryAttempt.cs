@@ -12,6 +12,7 @@ public sealed class WebhookDeliveryAttempt
     public DateTimeOffset? CompletedAt { get; private set; }
     public int? ResponseStatusCode { get; private set; }
     public byte[]? ResponseBody { get; private set; }
+    public bool ResponseBodyTruncated { get; private set; }
     public string? ErrorMessage { get; private set; }
     public bool Succeeded { get; private set; }
     public string DestinationUrl { get; private set; } = string.Empty;
@@ -52,7 +53,8 @@ public sealed class WebhookDeliveryAttempt
     public void Complete(
         int responseStatusCode,
         byte[] responseBody,
-        DateTimeOffset completedAt)
+        DateTimeOffset completedAt,
+        bool responseBodyTruncated = false)
     {
         EnsureNotCompleted();
 
@@ -67,6 +69,7 @@ public sealed class WebhookDeliveryAttempt
 
         ResponseStatusCode = responseStatusCode;
         ResponseBody = responseBody;
+        ResponseBodyTruncated = responseBodyTruncated;
         CompletedAt =
             DateTimePrecision.TruncateToMicroseconds(completedAt);
         Succeeded = responseStatusCode is >= 200 and <= 299;

@@ -1,9 +1,11 @@
 ﻿using HookHarbor.Api.Data;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
 using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 using HookHarbor.Api.Features.WebhookEvents;
 using HookHarbor.Api.Tests.TestInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text;
 
@@ -69,7 +71,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -118,7 +120,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -159,7 +161,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -195,7 +197,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeliverAsync(Guid.NewGuid(), CancellationToken.None));
 
@@ -218,7 +220,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -267,7 +269,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, httpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(webhookEventId, CancellationToken.None);
 
@@ -347,7 +349,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
 
-        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(eventId, CancellationToken.None);
 
@@ -390,7 +392,7 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
 
         var signatureService = new WebhookSignatureService();
 
-        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, signatureService);
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, signatureService, Options.Create(new WebhookDeliveryOptions()));
 
         await service.DeliverAsync(eventId, CancellationToken.None);
 
@@ -402,5 +404,60 @@ public sealed class WebhookDeliveryServiceTests : IClassFixture<HookHarborWebApp
         var expectedSignature = signatureService.CreateSignature(endpoint.SigningSecret, timestamp, Encoding.UTF8.GetBytes(body));
 
         Assert.Equal(expectedSignature, deliveredSignature);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WithOversizedResponse_TruncatesStoredBody()
+    {
+        const string destinationUrl = "https://destination.example.com/webhooks";
+        const string destinationResponse = "0123456789EXTRA";
+
+        var endpoint = await _testData.CreateEndpointAsync(destinationUrl);
+        var eventId = await _testData.CreateEventAsync(endpoint.InboundKey, """{"type", "large.response"}""");
+
+        var handler = new StubHttpMessageHandler(
+            (_, _) => Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(destinationResponse, Encoding.UTF8, "text/plain")
+                }
+            )
+        );
+
+        using var deliveryHttpClient = new HttpClient(handler);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<HookHarborDbContext>();
+
+        var deliveryOptions = Options.Create(
+            new WebhookDeliveryOptions
+            {
+                MaximumCapturedResponseBodyBytes = 10
+            }
+        );
+
+        var service = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService(), deliveryOptions);
+
+        await service.DeliverAsync(eventId, CancellationToken.None);
+
+        dbContext.ChangeTracker.Clear();
+
+        var storedEvent = await dbContext
+            .WebhookEvents
+            .AsNoTracking()
+            .SingleAsync(x => x.Id == eventId);
+
+        var attempt = await dbContext
+            .WebhookDeliveryAttempts
+            .AsNoTracking()
+            .SingleAsync(x => x.WebhookEventId == eventId);
+
+        Assert.True(attempt.Succeeded);
+        Assert.Equal(WebhookEventStatus.Delivered, storedEvent.Status);
+        Assert.True(attempt.ResponseBodyTruncated);
+        Assert.NotNull(attempt.ResponseBody);
+        Assert.Equal(10, attempt.ResponseBody.Length);
+        Assert.Equal("0123456789", Encoding.UTF8.GetString(attempt.ResponseBody));
     }
 }

@@ -39,6 +39,10 @@ public sealed class WebhookDeliveryAttemptConfiguration : IEntityTypeConfigurati
             .HasColumnName("response_body")
             .HasColumnType("bytea");
 
+        builder.Property(x => x.ResponseBodyTruncated)
+            .HasColumnName("response_body_truncated")
+            .IsRequired();
+
         builder.Property(x => x.ErrorMessage)
             .HasColumnName("error_message")
             .HasMaxLength(4_000);

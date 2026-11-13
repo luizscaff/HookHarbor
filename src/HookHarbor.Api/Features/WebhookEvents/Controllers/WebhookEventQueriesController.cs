@@ -88,6 +88,7 @@ public sealed class WebhookEventQueriesController(HookHarborDbContext dbContext)
                 x.CompletedAt,
                 x.ResponseStatusCode,
                 x.ResponseBody is null ? null : Encoding.UTF8.GetString(x.ResponseBody),
+                x.ResponseBodyTruncated,
                 x.ErrorMessage,
                 x.Succeeded))
             .ToList();

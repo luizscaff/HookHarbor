@@ -8,5 +8,6 @@ public sealed record WebhookDeliveryAttemptResponse(
     DateTimeOffset? CompletedAt,
     int? ResponseStatusCode,
     string? ResponseBody,
+    bool ResponseBodyTruncated,
     string? ErrorMessage,
     bool Succeeded);

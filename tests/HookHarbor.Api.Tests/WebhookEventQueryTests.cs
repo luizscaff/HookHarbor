@@ -1,13 +1,15 @@
-﻿using HookHarbor.Api.Features.WebhookEvents.Responses;
+﻿using HookHarbor.Api.Common;
+using HookHarbor.Api.Data;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Configuration;
+using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
+using HookHarbor.Api.Features.WebhookEvents.Responses;
 using HookHarbor.Api.Tests.TestInfrastructure;
-using HookHarbor.Api.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.Extensions.DependencyInjection;
-using HookHarbor.Api.Data;
-using Microsoft.EntityFrameworkCore;
 using System.Text;
-using HookHarbor.Api.Features.WebhookDeliveryAttempts.Services;
 
 namespace HookHarbor.Api.Tests;
 
@@ -221,7 +223,7 @@ public sealed class WebhookEventQueryTests : IClassFixture<HookHarborWebApplicat
                 .ServiceProvider
                 .GetRequiredService<HookHarborDbContext>();
 
-            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService());
+            var deliveryService = new WebhookDeliveryService(dbContext, deliveryHttpClient, new WebhookSignatureService(), Options.Create(new WebhookDeliveryOptions()));
 
             await deliveryService.DeliverAsync(eventId, CancellationToken.None);
         }
