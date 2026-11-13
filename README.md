@@ -586,7 +586,7 @@ Potential post-MVP work includes:
 
 ## Project status
 
-HookHarbor is currently approaching its first MVP release. The core ingestion, delivery, retry, diagnostics, security, testing, and Docker deployment flows are implemented.
+HookHarbor v0.1.0 is an MVP implementing durable ingestion, asynchronous delivery, retries, diagnostics, security, automated testing, and Docker deployment.
 
 ## License
 
